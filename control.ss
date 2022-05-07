@@ -163,7 +163,22 @@
 ;;{{{ reset/shift
 (begin
 ;;{{{ Implementation
+;;{{{ Way 1
 (define ($reset proc)
+  (call/cc (lambda (k)
+      (let* ([ks k] [end (lambda (x) (ks x))])
+        (proc
+          (lambda (cont)
+            (call/cc (lambda (kont) (let ([prev ks])
+                (end (cont (lambda (x)
+                    (call/cc (lambda (k)
+                        (set! ks (lambda (x)
+                            (set! ks prev) (k x)))
+                        (kont x))))))))))
+          end)))))
+;;}}}
+;;{{{ Way 2
+#;(define ($reset proc)
   (let* ([klist '()] [end (lambda (ret)
       (let ([k (car klist)])
         (set! klist (cdr klist))
@@ -178,7 +193,7 @@
                         (set! klist (cons k klist))
                         (kont x)))))))))
           end)))))
-
+;;}}}
 (define-syntax reset
   (lambda (x) (syntax-case x ()
       [(name body ...)
@@ -199,7 +214,7 @@
          (newline))
        ...))))
 (show "Test for reset/shift:"
-  (+ 1 (reset (* 2 (shift k (k (k 4))))))    ;==> 17
+  (1+ (reset (* 2 (shift k (k (k 4))))))     ;==> 17
   (reset
     (shift k (cons 1 (k (void))))
     (shift k (cons 2 (k (void))))
@@ -278,7 +293,7 @@
           (printf "\x1b;[31mTime exceeded.\x1b;[m~%")))
        ...))))
 (show-with-engine "Test for prompt/control:"
-  (+ 1 (prompt (* 2 (control k (k (k 4)))))) ;==> 17
+  (1+ (prompt (* 2 (control k (k (k 4))))))  ;==> 17
   (prompt
     (control k (cons 1 (k (void))))
     (control k (cons 2 (k (void))))
@@ -320,19 +335,18 @@
     (syntax-case x ()
       [(name body ...)
        (with-syntax ([amb (datum->syntax #'name 'amb)])
-         #'(let ([amb-fail (lambda ()
-               (error #f "amb tree exhausted"))])
+         #'(let ([amb-fail (list (lambda ()
+               (error #f "amb tree exhausted")))])
              (let-syntax ([amb (lambda (x) (syntax-case x ()
                  [(_ alts (... ...))
-                  #'(let ([prev amb-fail])
-                      (call/cc (lambda (cont)
-                          ((lambda _ (prev))
-                           (call/cc (lambda (k)
-                               (set! amb-fail (lambda ()
-                                   (set! amb-fail prev)
-                                   (k (void))))
-                               (cont alts)))
-                           (... ...)))))]))])
+                  #'(call/cc (lambda (cont)
+                        ((lambda _ ((car amb-fail)))
+                         (call/cc (lambda (k)
+                             (set! amb-fail (cons (lambda ()
+                                 (set! amb-fail (cdr amb-fail))
+                                 (k (void))) amb-fail))
+                             (cont alts)))
+                         (... ...))))]))])
                body ...)))])))
 ) ;;}}}
 ;;{{{ Implementation 2
