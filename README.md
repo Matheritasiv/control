@@ -5,6 +5,7 @@ Several control structures implemented by `call/cc` in scheme language:
 * `coroutine/resume`
 * `reset/shift`
 * `prompt/control`
+* `amb`
 
 Run with Chez Scheme 9.5
 
