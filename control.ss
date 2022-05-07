@@ -267,15 +267,17 @@
                (end (begin body ...))))))])))
 ;;}}}
 ;;{{{ Test
-(define-syntax show
+(define-syntax show-with-engine
   (syntax-rules ()
     ((_ expr ...)
      (begin
-       (begin
-         (display expr)
-         (newline))
+       ((make-engine (lambda () expr)) 1000
+        (lambda (t v)
+          (display v) (newline))
+        (lambda (k)
+          (printf "\x1b;[31mTime exceeded.\x1b;[m~%")))
        ...))))
-(show "Test for prompt/control:"
+(show-with-engine "Test for prompt/control:"
   (+ 1 (prompt (* 2 (control k (k (k 4)))))) ;==> 17
   (prompt
     (control k (cons 1 (k (void))))
@@ -307,5 +309,80 @@
       (set! i (1+ i))
       (control k (+ i (k i) (k i)))))        ;==> ⊥
 ) (newline)
+;;}}}
+) ;;}}}
+;;{{{ amb
+(begin
+;;{{{ Implementation 1
+(begin
+(define-syntax with-amb
+  (lambda (x)
+    (syntax-case x ()
+      [(name body ...)
+       (with-syntax ([amb (datum->syntax #'name 'amb)])
+         #'(let ([amb-fail (lambda ()
+               (error #f "amb tree exhausted"))])
+             (let-syntax ([amb (lambda (x) (syntax-case x ()
+                 [(_ alts (... ...))
+                  (with-syntax ([(v (... ...))
+                      (generate-temporaries #'(alts (... ...)))])
+                    #'(let ([prev amb-fail])
+                        (call/cc (lambda (cont)
+                            ((lambda (v (... ...)) (prev))
+                             (call/cc (lambda (k)
+                                 (set! amb-fail (lambda ()
+                                     (set! amb-fail prev)
+                                     (k (void))))
+                                 (cont alts)))
+                             (... ...))))))]))])
+               body ...)))])))
+) ;;}}}
+;;{{{ Implementation 2
+#;(begin
+(define-syntax with-amb
+  (lambda (x)
+    (syntax-case x ()
+      [(name body ...)
+       (with-syntax ([amb (datum->syntax #'name 'amb)])
+         #'(let ([amb-fail (lambda ()
+               (error #f "amb tree exhausted"))])
+             (let-syntax ([amb (lambda (x) (letrec ([shuffle! (lambda (l)
+                 (if (null? l) l
+                   (let* ([n (length l)] [m (random n)])
+                     (if (zero? m)
+                       (begin (set-cdr! l (shuffle! (cdr l))) l)
+                       (let* ([r (list-tail l (1- m))]
+                              [p (cdr r)] [n (cdr l)])
+                         (set-cdr! l (cdr p))
+                         (set-cdr! p (shuffle!
+                             (if (= m 1) l
+                               (begin (set-cdr! r l) n))))
+                         p)))))])
+               (random-seed (time-nanosecond (current-time)))
+               (syntax-case x ()
+                 [(_ alts (... ...))
+                  (with-syntax ([(alts (... ...))
+                      (shuffle! (syntax->list #'(alts (... ...))))])
+                    #'(let ([prev amb-fail])
+                        (call/cc (lambda (cont)
+                            (call/cc (lambda (k)
+                                (set! amb-fail (lambda ()
+                                    (set! amb-fail prev)
+                                    (k (void))))
+                                (cont alts))) (... ...)
+                            (prev)))))])))])
+               body ...)))])))
+) ;;}}}
+;;{{{ Test
+(display "Test for amb:") (newline)
+(display
+  (with-amb
+    (let ([a (amb 1 2 3)])
+      (if (not (= a 3)) (amb))
+      (amb (amb) (with-amb (amb))
+        (let ([amb (lambda () a)])
+          (amb)))))                          ;==> 3 | ⊥
+) (newline)
+(newline)
 ;;}}}
 ) ;;}}}
