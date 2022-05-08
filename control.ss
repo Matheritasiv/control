@@ -71,7 +71,7 @@
 (newline)
 ;;}}}
 ) ;;}}}
-;;{{{ coroutine/resume
+;;{{{ coroutine
 (begin
 ;;{{{ Implementation
 (define ($coroutine proc)
@@ -150,7 +150,7 @@
                 (loop (1- count) (apply comb l) t))
               (loop (1- count) (apply comb l) 0))))))))
 ;;}}}
-(display "Test for coroutine/resume:") (newline)
+(display "Test for coroutine:") (newline)
 (let ([b 1000])
   (letrec* ([pr (lambda (x) (printer x))]
             [calc1 (make-calc-coroutine pr b 1/7 20)]
@@ -207,12 +207,11 @@
 ;;{{{ Test
 (define-syntax show
   (syntax-rules ()
-    ((_ expr ...)
+    [(_ expr ...)
      (begin
        (begin
-         (display expr)
-         (newline))
-       ...))))
+         (display expr) (newline))
+       ...)]))
 (show "Test for reset/shift:"
   (1+ (reset (* 2 (shift k (k (k 4))))))     ;==> 17
   (reset
@@ -284,14 +283,14 @@
 ;;{{{ Test
 (define-syntax show-with-engine
   (syntax-rules ()
-    ((_ expr ...)
+    [(_ expr ...)
      (begin
        ((make-engine (lambda () expr)) 1000
         (lambda (t v)
           (display v) (newline))
         (lambda (k)
           (printf "\x1b;[31mTime exceeded.\x1b;[m~%")))
-       ...))))
+       ...)]))
 (show-with-engine "Test for prompt/control:"
   (1+ (prompt (* 2 (control k (k (k 4))))))  ;==> 17
   (prompt
@@ -389,11 +388,12 @@
 (display "Test for amb:") (newline)
 (display
   (with-amb
-    (let ([a (amb 1 2 3)])
-      (if (not (= a 3)) (amb))
+    (let* ([a (amb 1 2 3 4)] [b (amb 3 4 5 6)]
+           [c (+ (* 10 b) a)])
+      (if (not (= (* a b) 8)) (amb))
       (amb (amb) (with-amb (amb))
-        (let ([amb (lambda () a)])
-          (amb)))))                          ;==> 3 | ⊥
+        (let ([amb (lambda () c)])
+          (amb)))))                          ;==> 42 | ⊥
 ) (newline)
 (newline)
 ;;}}}
