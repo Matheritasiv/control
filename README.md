@@ -2,7 +2,7 @@
 Several control structures implemented by `call/cc` in scheme language:
 
 * `generator/yield`
-* `coroutine/resume`
+* `coroutine`
 * `reset/shift`
 * `prompt/control`
 * `amb`
